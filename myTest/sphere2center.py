@@ -19,6 +19,21 @@ L = ti.field(ti.f32, shape=(), needs_grad=True)
 vertex = ti.field(ti.f32, shape=(3,3))
 ver_index = ti.field(ti.f32, shape=(3,1))
 
+vertex = [[0.5, 0, 2], [0, 0, 2], [0, 0.5, 2]]
+ver_index = [[0, 1, 2]]
+
+@ti.func
+def intersectTraingle(vertex, ver_index):
+    a = vertex[0]-vertex[1]
+    print(a)
+
+@ti.kernel
+def test():
+    intersectTraingle(vertex, ver_index)
+
+test()
+
+exit()
 
 
 @ti.data_oriented
@@ -67,18 +82,18 @@ class Camera:
 @ti.kernel
 def rendering():
     # 渲染球体
-    sphere.__init__([center[0], center[1], center[2]], 1)
-    for i, j in ti.ndrange(height, width):
-        _ray = camera.get_ray(i, j)
-        is_hit = sphere.hit(_ray, ti.Vector(sphere.center))
-        if is_hit:
-            pixels[i, j] = 0
-        else:
-            pixels[i, j] = 1
-    print(sphere.center[0])
+    # sphere.__init__([center[0], center[1], center[2]], 1)
+    # for i, j in ti.ndrange(height, width):
+    #     _ray = camera.get_ray(i, j)
+    #     is_hit = sphere.hit(_ray, ti.Vector(sphere.center))
+    #     if is_hit:
+    #         pixels[i, j] = 0
+    #     else:
+    #         pixels[i, j] = 1
+    # print(sphere.center[0])
 
     # 渲染三角形
-    # print("rending triangle...")
+    print("rending triangle...")
 
 
 
