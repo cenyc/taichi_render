@@ -3,15 +3,18 @@ import numpy as np
 import math
 
 # CUDA 在生成随机数时比 OpenGL 慢很多
-ti.init(arch=ti.cpu)
+ti.init(arch=ti.gpu)
 
 # 画布大小
 width = 512
 height = 512
 
 # 定义三角形
-ver = np.array([(2.0, 0.0, 2.0), (0.0, 0.0, 2.0), (0.0, 2.0, 2.0)], dtype=np.float32)
+ver = np.array([(1.5, 0.0, -2.0), (0.0, 0.0, -2.0), (0.0, 1.5, -2.0)], dtype=np.float32)
 ver_index = np.array([0, 1, 2])
+
+# 定义视锥参数
+cone = {"l": -1, "r": 1, "t": 1, "b": -1, "n": -1, "f": 10}
 
 # a = ti.Vector
 center = ti.field(ti.f32, shape=3, needs_grad=True)
@@ -68,12 +71,6 @@ def intersectTraingle(orig, dir, ver):
     return is_hit, dir_t, u, v
 
 
-# @ti.kernel
-# def test():
-#     intersectTraingle(ti.Vector([0.0, 0.0, 0.0]), ti.Vector([0.1, 0.1, 1.0]),f)
-
-
-
 @ti.data_oriented
 class Ray:
     def __init__(self, org, dir):
@@ -104,7 +101,7 @@ class Sphere:
 class Camera:
     def __init__(self, org):
         self.origin = org
-        self.left_down_corner = [-1, -1, 0]
+        self.left_down_corner = [-1, -1, -1]
         self.width = 2
         self.height = 2
         self.step_x = self.width / width
@@ -158,14 +155,16 @@ def gradient_descent():
 gui = ti.GUI('SDF 2D')
 _center = [-1, -1, 2]
 _tar_center = [0, 0, 2]
-camera = Camera([0, 0, -1])
+# 相机位置
+camera = Camera([0, 0, 0])
+# 圆球位置
 sphere = Sphere(_center, 1)
-
+# 变量赋值
 center.from_numpy(np.asarray(_center))
 target_center.from_numpy(np.asarray(_tar_center))
 vertex.from_numpy(ver)
 
-while True:
+while gui.running:
     while gui.get_event(ti.GUI.PRESS):
         if gui.event.key == ti.GUI.ESCAPE:
             exit()
