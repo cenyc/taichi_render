@@ -130,9 +130,10 @@ class Camera:
                 self.left_down_corner[2]]) - ti.Vector(self.origin)
         return Ray(origin, direction)
 
+# 在像素坐标系中进行采样
 @ti.func
-def sampling_gradient(pix0, pix1):
-    print("starting sampling...")
+def sampling_gradient_uv(pix0, pix1):
+    print("Sampling form pixel coordinate systems.")
     # print(v0, v1)
     # norm = (v1-v0).normalized()
     p0 = ti.cast(pix0, ti.f32)
@@ -151,7 +152,10 @@ def sampling_gradient(pix0, pix1):
             if pixels[pt[0], pt[1]] == 0:
                 pixels[pt_temp[0], pt_temp[1]] = 1
 
-
+# 在世界坐标系中进行采样
+@ti.func
+def sampling_gradient_v():
+    print('Sampling from world coordinate systems.')
 # 透视投影
 # v: 为世界坐标系中的一个三维点位置，这里的v用齐次坐标表示，大小为4*1[x_w, y_w, z_w, 1]，其中psp_mat是投影矩阵
 # psp_v: 为v投影到归一化的图像坐标系中的一个点，也用齐次坐标表示，大小为3*1[x_o, y_o, 1]
@@ -168,6 +172,13 @@ def pers_project(v):
 def xy2uv(psp_v):
     uv = xy2uv_mat @ ti.Vector([psp_v[0], psp_v[1], 1])  # 像素坐标
     return ti.cast(uv, ti.int32)
+
+# 像素坐标->图像坐标转换
+# uv: 像素坐标，使用其次坐标表示，大小为3*1[u, v, 1]
+# xy: 图像坐标，使用齐次坐标表述，大小为3*1[x, y, 1]
+@ti.func
+def uv2xy(uv):
+    return uv2xy_mat @ uv
 
 @ti.func
 def v2uv(v):
@@ -195,11 +206,11 @@ def rendering():
         v2 = vertex_4[vi[i, 2]]
 
         pix0 = v2uv(v0)
-        pix1 = v2uv(v1)
-        pix2 = v2uv(v2)
-        sampling_gradient(pix0, pix1)
-        sampling_gradient(pix1, pix2)
-        sampling_gradient(pix2, pix0)
+        # pix1 = v2uv(v1)
+        # pix2 = v2uv(v2)
+        # sampling_gradient(pix0, pix1)
+        # sampling_gradient(pix1, pix2)
+        # sampling_gradient(pix2, pix0)
 
     # for i in ti.static(range(vi.n)):
     #     print(vi[i, 0], vi[i, 1])
@@ -263,7 +274,7 @@ while gui.running:
         if gui.event.key == ti.GUI.ESCAPE:
             exit()
     rendering()
-    # exit()
+    exit()
     with ti.Tape(loss=L):
         reduce()
     gradient_descent()
