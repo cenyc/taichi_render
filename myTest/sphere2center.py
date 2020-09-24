@@ -152,7 +152,7 @@ def sampling_gradient_uv(pix0, pix1):
             if pixels[pt[0], pt[1]] == 0:
                 pixels[pt_temp[0], pt_temp[1]] = 1
 
-# 在世界坐标系中进行采样 未完成
+# 在世界坐标系中进行采样
 @ti.func
 def sampling_gradient_v():
     print('Sampling from world coordinate systems.')
