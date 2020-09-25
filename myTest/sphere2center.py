@@ -132,12 +132,11 @@ class Camera:
 
 # 在像素坐标系中进行采样
 @ti.func
-def sampling_gradient_uv(pix0, pix1):
-    print("Sampling form pixel coordinate systems.")
+def sampling_gradient(a, b, type=1):
     # print(v0, v1)
     # norm = (v1-v0).normalized()
-    p0 = ti.cast(pix0, ti.f32)
-    p1 = ti.cast(pix1, ti.f32)
+    p0 = ti.cast(a, ti.f32)
+    p1 = ti.cast(b, ti.f32)
     p01 = p1-p0
     norm = p01.normalized()
     p01_len = p01.norm()
@@ -148,14 +147,23 @@ def sampling_gradient_uv(pix0, pix1):
         pt += norm * sampling_step
         pt_len = pt.norm()
         if pt_len <= p01_len:
-            pt_temp = ti.cast(p0+pt, ti.int32)
-            if pixels[pt[0], pt[1]] == 0:
-                pixels[pt_temp[0], pt_temp[1]] = 1
+            if type == 1:
+                # 在像素坐标系中采样
+                pt_temp = ti.cast(p0+pt, ti.int32)
+                if pixels[pt[0], pt[1]] == 0:
+                    pixels[pt_temp[0], pt_temp[1]] = 1
+            else:
+                # 在世界坐标系中采样
+                pt_temp = p0 + pt
+
 
 # 在世界坐标系中进行采样 未完成
 @ti.func
-def sampling_gradient_v():
+def sampling_gradient_v(va, vb):
     print('Sampling from world coordinate systems.')
+
+
+
 # 透视投影
 # v: 为世界坐标系中的一个三维点位置，这里的v用齐次坐标表示，大小为4*1[x_w, y_w, z_w, 1]，其中psp_mat是投影矩阵
 # psp_v: 为v投影到归一化的图像坐标系中的一个点，也用齐次坐标表示，大小为3*1[x_o, y_o, 1]
