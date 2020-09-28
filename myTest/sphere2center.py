@@ -5,16 +5,35 @@ import math
 # CUDA 在生成随机数时比 OpenGL 慢很多
 ti.init(arch=ti.cpu)
 
+# ---------------test-----------------
+# a = ti.Vector(2, dt=ti.f32, shape=3)
+# @ti.kernel
+# def test():
+#     print('start test')
+#     a[0][0] = -2.2
+#     a[0][0] = ti.abs(a[0][0])
+#     print(a[0])
+# test()
+# exit()
+# ------------------------------------
+
+
 # 画布大小
 width = 512
 height = 512
 # 采样步长
-sampling_step = 5
+sampling_step = 0.01
+# 学习率
+lr = 0.0001
 # 定义三角形
-ver = np.array([(1.5878, 0.0, -2.0), (0.0, 0.0, -2.0), (0.0, 1.5, -2.0)], dtype=np.float32)
+ver3_np = np.array([(1.5, 0.0, -2.0), (0.0, 0.0, -2.0), (0.0, 1.5, -2.0)], dtype=np.float32)
+# 目标三角形顶点
+# tar_ver3_np = np.array([(0.5, -1, -2.0), (-1.0, -1.0, -2.0), (-1.0, 0.5, -2.0)], dtype=np.float32)
+tar_ver3_np = np.array([(1.5, 0.0, -2.0), (0.0, 0.0, -2.0), (0.0, 1.5, -2.0)], dtype=np.float32)
 ver_index = np.array([(0, 1, 2)])
-ver_4 = np.insert(ver, 3, np.array([1, 1, 1]), axis=1)
-
+# 顶点的齐次坐标形式
+ver4_np = np.insert(ver3_np, 3, np.array([1, 1, 1]), axis=1)
+tar_ver4_np = np.insert(tar_ver3_np, 3, np.array([1, 1, 1]), axis=1)
 # 定义视锥参数
 cone = {"l": -1.0, "r": 1.0, "t": 1.0, "b": -1.0, "n": -1.0, "f": -10.0}
 cone_mat = np.array([(2*cone["n"]/(cone["r"]-cone["l"]), 0, -(cone["r"]+cone["l"])/(cone["r"]-cone["l"]), 0.),
@@ -24,12 +43,25 @@ cone_mat = np.array([(2*cone["n"]/(cone["r"]-cone["l"]), 0, -(cone["r"]+cone["l"
                      ], dtype=np.float32)
 # 相机位置
 cam_org = np.array([0, 0, 0])
-
+# 记录采样次数
+sampling_num = ti.field(ti.int32, shape=3)
 # 定义taichi变量
 center = ti.field(ti.f32, shape=3, needs_grad=True)
-pixels = ti.field(ti.f32, shape=(width, height))
+pixels = ti.field(ti.f32, shape=(height, width))
+# 目标图像
+target_img = ti.field(ti.f32, shape=(height, width))
+# 源图像
+source_img = ti.field(ti.f32, shape=(height, width))
+# debug
+debug_img = ti.field(ti.f32, shape=(height, width))
+# 目标图像-源图像
+diff_img = ti.field(ti.f32, shape=(height, width))
+# 梯度矩阵
+gradient_img = ti.Vector.field(2, dtype=ti.f32, shape=(height, width, 3))
+
 target_center = ti.field(ti.f32, shape=3)
 L = ti.field(ti.f32, shape=(), needs_grad=True)
+Loss = ti.Vector(2, dt=ti.f32, shape=3)
 # 透视变换矩阵(相机坐标系->图像坐标系)
 psp_mat = ti.Matrix.field(4, 4, dtype=ti.f32, shape=())
 # 图像坐标系->像素坐标系转换矩阵, (u, v, 1) = xy2uv_mat@xy
@@ -37,9 +69,11 @@ xy2uv_mat = ti.Matrix.field(3, 3, dtype=ti.f32, shape=())
 # 像素坐标系->图像坐标系转换矩阵，(x, y, 1) = uv2xy_mat@uv
 uv2xy_mat = ti.Matrix.field(3, 3, dtype=ti.f32, shape=())
 # 定义三角形
-vertex_3 = ti.Vector.field(3, ti.f32, shape=3)
+ver3 = ti.Vector.field(3, ti.f32, shape=3)
+tar_ver3 = ti.Vector.field(3, ti.f32, shape=3)
 # 齐次坐标时使用
-vertex_4 = ti.Vector.field(4, ti.f32, shape=3)
+ver4 = ti.Vector.field(4, ti.f32, shape=3)
+tar_ver4 = ti.Vector.field(4, ti.f32, shape=3)
 # 三角形顶点索引
 # ver_index = ti.field(ti.f32, shape=(3, 1))
 
@@ -132,11 +166,11 @@ class Camera:
 
 # 在像素坐标系中进行采样
 @ti.func
-def sampling_gradient(a, b, type=1):
+def sampling_gradient(a, b, vid, type=1):
     # print(v0, v1)
     # norm = (v1-v0).normalized()
-    p0 = ti.cast(a, ti.f32)
-    p1 = ti.cast(b, ti.f32)
+    p0 = ti.cast(a, ti.f32) # a
+    p1 = ti.cast(b, ti.f32) # b
     p01 = p1-p0
     norm = p01.normalized()
     p01_len = p01.norm()
@@ -147,7 +181,7 @@ def sampling_gradient(a, b, type=1):
         pt += norm * sampling_step
         pt_len = pt.norm()
         if pt_len <= p01_len:
-            if type == 1:
+            if type == 0:
                 # 在像素坐标系中采样
                 pt_temp = ti.cast(p0+pt, ti.int32)
                 if pixels[pt[0], pt[1]] == 0:
@@ -155,13 +189,16 @@ def sampling_gradient(a, b, type=1):
             else:
                 # 在世界坐标系中采样
                 pt_temp = p0 + pt
-
-
-# 在世界坐标系中进行采样 未完成
-@ti.func
-def sampling_gradient_v(va, vb):
-    print('Sampling from world coordinate systems.')
-
+                # print(pt_temp)
+                pt_4 = ti.Vector([pt_temp[0], pt_temp[1], pt_temp[2], 1])
+                uv = v2uv(pt_4)
+                # 这A的计算似乎有点多余，对应论文公式(10)
+                A = 3*p01_len*(1-0)/p01_len
+                # 计算ax，ay的梯度，这里把p0当作a，p1当作b
+                gradient_img[uv[0], uv[1], vid] = ti.Vector([p1[1]-pt_temp[1], pt_temp[0]-p1[0]])*A*2*diff_img[uv[0], uv[1]]
+                sampling_num[vid] += 1
+                # if pixels[pt[0], pt[1]] == 0:
+                #     pixels[uv[0], uv[1]] = 1
 
 
 # 透视投影
@@ -193,6 +230,28 @@ def v2uv(v):
     psp_v = pers_project(v)
     return xy2uv(psp_v)
 
+@ti.func
+def get_img(ver, img):
+    for i, j in ti.ndrange(height, width):
+        _ray = camera.get_ray(i, j)
+        is_hit, t, u, v = intersect_triangle(_ray.origin, _ray.direction, ver)
+        if is_hit:
+            img[i, j] = 1
+        else:
+            img[i, j] = 0
+
+@ti.kernel
+def get_target_img():
+    get_img(tar_ver3, target_img)
+
+@ti.kernel
+def get_source_img():
+    get_img(ver3, source_img)
+    for i, j in ti.ndrange(height, width):
+        diff_img[i, j] = ti.abs(target_img[i, j] - source_img[i, j])
+
+
+
 @ti.kernel
 def rendering():
     # 渲染球体
@@ -209,16 +268,17 @@ def rendering():
     # 对三角形的边进行采样
     vi = ti.Vector(ver_index)
     for i in ti.static(range(vi.n)):
-        v0 = vertex_4[vi[i, 0]]
-        v1 = vertex_4[vi[i, 1]]
-        v2 = vertex_4[vi[i, 2]]
+        v0 = ver3[vi[i, 0]]
+        v1 = ver3[vi[i, 1]]
+        v2 = ver3[vi[i, 2]]
 
-        pix0 = v2uv(v0)
+        # pix0 = v2uv(v0)
         # pix1 = v2uv(v1)
         # pix2 = v2uv(v2)
-        # sampling_gradient(pix0, pix1)
-        # sampling_gradient(pix1, pix2)
-        # sampling_gradient(pix2, pix0)
+
+        # sampling_gradient(v0, v1, 0, 0)
+        # sampling_gradient(v1, v2, 1, type=0)
+        # sampling_gradient(v2, v0, 2, type=0)
 
     # for i in ti.static(range(vi.n)):
     #     print(vi[i, 0], vi[i, 1])
@@ -250,12 +310,38 @@ def reduce():
 
 @ti.kernel
 def gradient_descent():
-        center[0] -= center.grad[0] * 0.05
-        center[1] -= center.grad[1] * 0.05
-        center[2] -= center.grad[2] * 0.05
+    center[0] -= center.grad[0] * 0.05
+    center[1] -= center.grad[1] * 0.05
+    center[2] -= center.grad[2] * 0.05
+
+# 计算原图像与目标图像梯度
+@ti.kernel
+def gradient():
+    print('[calculate gradient...]')
+    # 对三角形的边进行采样
+    vi = ti.Vector(ver_index)
+    for i in ti.static(range(vi.n)):
+        v0 = ver3[vi[i, 0]]
+        v1 = ver3[vi[i, 1]]
+        v2 = ver3[vi[i, 2]]
+        sampling_gradient(v0, v1, 0)
+        sampling_gradient(v1, v2, 1)
+        sampling_gradient(v2, v0, 2)
+    # 梯度求和获取Loss
+    # aa = 1
+    for i, j, k in ti.ndrange(height, width, 3):
+        Loss[k] += gradient_img[i, j, k]
+    for k in ti.ndrange(3):
+        Loss[k] /= sampling_num[k]
+        sampling_num[k] = 0
+        # 梯度下降
+        ver3[k] -= ti.Vector([Loss[k][0], Loss[k][1], 0.0])*lr
+        print(Loss[0], Loss[1], Loss[2])
 
 
-gui = ti.GUI('SDF 2D')
+# 开始进行可微渲染计算
+# ----------------------------------------------------
+gui = ti.GUI('DR')
 _center = [-1, -1, 2]
 _tar_center = [0, 0, 2]
 # 相机位置
@@ -272,21 +358,27 @@ uv2xy_mat_np = np.array([(dx, 0.0, -uo*dx), (0.0, dy, -vo*dy), (0.0, 0.0, 1)], d
 # 变量赋值
 center.from_numpy(np.asarray(_center))
 target_center.from_numpy(np.asarray(_tar_center))
-vertex_3.from_numpy(ver) # 网格顶点
-vertex_4.from_numpy(ver_4) # 网格顶点-供其次坐标使用
+ver3.from_numpy(ver3_np) # 网格顶点
+tar_ver3.from_numpy(tar_ver3_np)
+ver4.from_numpy(ver4_np) # 网格顶点-供其次坐标使用
+tar_ver4.from_numpy(tar_ver4_np)
 psp_mat.from_numpy(cone_mat) # 透视投影矩阵
 xy2uv_mat.from_numpy(xy2uv_mat_np) # 图像坐标->像素坐标 转换矩阵
 uv2xy_mat.from_numpy(uv2xy_mat_np) # 像素坐标->图像坐标 转换矩阵
+
+# 获取目标图像
+get_target_img()
 while gui.running:
     while gui.get_event(ti.GUI.PRESS):
         if gui.event.key == ti.GUI.ESCAPE:
             exit()
-    rendering()
-    exit()
+    get_source_img()
     with ti.Tape(loss=L):
         reduce()
-    gradient_descent()
-    gui.set_image(pixels.to_numpy())
+    gradient()
+    # I = target_img.to_numpy()-source_img.to_numpy()
+    gui.set_image(source_img.to_numpy())
+    # gui.set_image(I)
     gui.show()
 
 
