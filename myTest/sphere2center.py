@@ -24,9 +24,9 @@ height = 512
 # 采样步长
 sampling_step = 0.01
 # 学习率
-lr = 0.0001
+lr = 0.01
 # 定义三角形
-ver3_np = np.array([(1.5, 0.0, -2.0), (0.0, 0.0, -2.0), (0.0, 1.5, -2.0)], dtype=np.float32)
+ver3_np = np.array([(1.5, 0.0, -2.0), (-1.0, -1.0, -2.0), (0.0, 1.5, -2.0)], dtype=np.float32)
 # 目标三角形顶点
 # tar_ver3_np = np.array([(0.5, -1, -2.0), (-1.0, -1.0, -2.0), (-1.0, 0.5, -2.0)], dtype=np.float32)
 tar_ver3_np = np.array([(1.5, 0.0, -2.0), (0.0, 0.0, -2.0), (0.0, 1.5, -2.0)], dtype=np.float32)
@@ -199,7 +199,11 @@ def sampling_gradient(a, b, vid, type=1):
                 sampling_num[vid] += 1
                 # if pixels[pt[0], pt[1]] == 0:
                 #     pixels[uv[0], uv[1]] = 1
-
+                debug_img[uv[0], uv[1]] = gradient_img[uv[0], uv[1], vid][0]
+    # gradient of continuous area
+    # for i, j, k in ti.ndrange(height, width, 3):
+    #     if diff_img[i, j] > 0 :
+    #         gradient_img[i, j, k] = ti.Vector([diff_img[i, j], diff_img[i, j]])
 
 # 透视投影
 # v: 为世界坐标系中的一个三维点位置，这里的v用齐次坐标表示，大小为4*1[x_w, y_w, z_w, 1]，其中psp_mat是投影矩阵
@@ -248,7 +252,10 @@ def get_target_img():
 def get_source_img():
     get_img(ver3, source_img)
     for i, j in ti.ndrange(height, width):
-        diff_img[i, j] = ti.abs(target_img[i, j] - source_img[i, j])
+        # diff_img[i, j] = ti.abs(target_img[i, j] - source_img[i, j])
+        diff_img[i, j] = source_img[i, j] - target_img[i, j]
+        if diff_img[i, j] != 0:
+            diff_img[i, j] = 1
 
 
 
@@ -332,12 +339,25 @@ def gradient():
     for i, j, k in ti.ndrange(height, width, 3):
         Loss[k] += gradient_img[i, j, k]
     for k in ti.ndrange(3):
-        Loss[k] /= sampling_num[k]
+        # Loss[k] /= sampling_num[k]
+        Loss[k] /= height*width
         sampling_num[k] = 0
         # 梯度下降
         ver3[k] -= ti.Vector([Loss[k][0], Loss[k][1], 0.0])*lr
         print(Loss[0], Loss[1], Loss[2])
 
+@ti.func
+def clear_img():
+    # clear gradient_img
+    for i, j, k in ti.ndrange(height, width, 3):
+        gradient_img[i, j, k] = ti.Vector([0.0, 0.0])
+    # clear debug_img
+    for i, j in ti.ndrange(height, width):
+        debug_img[i, j] = 0.0
+
+@ti.kernel
+def postprocessing():
+    clear_img()
 
 # 开始进行可微渲染计算
 # ----------------------------------------------------
@@ -377,9 +397,10 @@ while gui.running:
         reduce()
     gradient()
     # I = target_img.to_numpy()-source_img.to_numpy()
-    gui.set_image(source_img.to_numpy())
+    gui.set_image(diff_img.to_numpy())
     # gui.set_image(I)
     gui.show()
+    postprocessing()
 
 
 
