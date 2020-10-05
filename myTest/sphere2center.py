@@ -58,6 +58,8 @@ debug_img = ti.field(ti.f32, shape=(height, width))
 diff_img = ti.field(ti.f32, shape=(height, width))
 # 梯度矩阵
 gradient_img = ti.Vector.field(2, dtype=ti.f32, shape=(height, width, 3))
+# loss梯度矩阵
+d_loss = ti.field(ti.f32, shape=(height, width))
 
 target_center = ti.field(ti.f32, shape=3)
 L = ti.field(ti.f32, shape=(), needs_grad=True)
