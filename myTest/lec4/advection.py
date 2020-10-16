@@ -135,7 +135,7 @@ def backtrace(I, dt):
 def semi_lagrangian(x, new_x, dt):
     # Note: this loop is parallelized
     for I in ti.grouped(x):
-        # 这里I是一个关于位置的2*1向量
+        # 这里I是一个关于位置的 2*1 向量
         new_x[I] = sample_bilinear(x, backtrace(I, dt))
         
 # Reference: https://github.com/ziyinq/Bimocq/blob/master/src/bimocq2D/BimocqSolver2D.cpp
