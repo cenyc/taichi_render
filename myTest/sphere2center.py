@@ -63,7 +63,7 @@ d_loss = ti.field(ti.f32, shape=(height, width))
 
 target_center = ti.field(ti.f32, shape=3)
 L = ti.field(ti.f32, shape=(), needs_grad=True)
-Loss = ti.Vector(2, dt=ti.f32, shape=3)
+Loss = ti.Vector.field(2, dtype=ti.f32, shape=3)
 # 透视变换矩阵(相机坐标系->图像坐标系)
 psp_mat = ti.Matrix.field(4, 4, dtype=ti.f32, shape=())
 # 图像坐标系->像素坐标系转换矩阵, (u, v, 1) = xy2uv_mat@xy
@@ -174,7 +174,9 @@ def sampling_gradient(a, b, vid, type=1):
     p0 = ti.cast(a, ti.f32) # a
     p1 = ti.cast(b, ti.f32) # b
     p01 = p1-p0
+    # p01的法向量
     norm = p01.normalized()
+    # p01的长度
     p01_len = p01.norm()
     pt = norm*0
     pt_len = pt.norm()
@@ -256,8 +258,8 @@ def get_source_img():
     for i, j in ti.ndrange(height, width):
         # diff_img[i, j] = ti.abs(target_img[i, j] - source_img[i, j])
         diff_img[i, j] = source_img[i, j] - target_img[i, j]
-        if diff_img[i, j] != 0:
-            diff_img[i, j] = 1
+        # if diff_img[i, j] != 0:
+        #     diff_img[i, j] = 1
 
 
 
@@ -330,6 +332,7 @@ def gradient():
     # 对三角形的边进行采样
     vi = ti.Vector(ver_index)
     for i in ti.static(range(vi.n)):
+        print(i)
         v0 = ver3[vi[i, 0]]
         v1 = ver3[vi[i, 1]]
         v2 = ver3[vi[i, 2]]
@@ -346,7 +349,7 @@ def gradient():
         sampling_num[k] = 0
         # 梯度下降
         ver3[k] -= ti.Vector([Loss[k][0], Loss[k][1], 0.0])*lr
-        print(Loss[0], Loss[1], Loss[2])
+        # print(Loss[0], Loss[1], Loss[2])
 
 @ti.func
 def clear_img():
