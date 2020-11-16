@@ -6,12 +6,17 @@ ti.init(arch=ti.cpu)
 h = 512
 w = 512
 
-I = ti.field(ti.f32, shape=(h, w))
+I = ti.field(dtype=ti.f32, shape=(h, w))
+read_np = np.ndarray(dtype=np.uint8, shape=(h, w))
+read_np = ti.imread('target.png')
+
 
 @ti.kernel
 def test():
-    for i, j in ti.ndrange(h, w):
-        I[i, j] = 1.0
+    # for i, j in ti.ndrange(h, w):
+    #     if i > 50 and i < 461:
+    #         I[i, j] = 0.5
+    print('test')
 
 test()
 
@@ -21,5 +26,5 @@ while gui.running:
         if gui.event.key == ti.GUI.ESCAPE:
             exit()
 
-    gui.set_image(I.to_numpy())
+    gui.set_image(read_np)
     gui.show()

@@ -26,7 +26,7 @@ sampling_step = 0.01
 # 学习率
 lr = 0.1
 # 定义三角形
-ver3_np = np.array([(1.5, 0.0, -2.0), (-1.0, -1.0, -2.0), (0.0, 1.5, -2.0)], dtype=np.float32)
+ver3_np = np.array([(1.5, 0.0, -10.0), (-1.0, -1.0, -10.0), (0.0, 1.5, -10.0)], dtype=np.float32)
 # 目标三角形顶点
 # tar_ver3_np = np.array([(0.5, -1, -2.0), (-1.0, -1.0, -2.0), (-1.0, 0.5, -2.0)], dtype=np.float32)
 tar_ver3_np = np.array([(1.5, 0.0, -2.0), (0.0, 0.0, -2.0), (0.0, 1.5, -2.0)], dtype=np.float32)
@@ -169,10 +169,12 @@ class Camera:
 # 在像素坐标系中进行采样
 @ti.func
 def sampling_gradient(a, b, vid, type=1):
-    # print(v0, v1)
-    # norm = (v1-v0).normalized()
-    p0 = ti.cast(a, ti.f32) # a
-    p1 = ti.cast(b, ti.f32) # b
+    # 转换到图像坐标系中，hgc表示齐次坐标
+    p0_hgc = pers_project(a)
+    p1_hgc = pers_project(b)
+    print(p0_hgc)
+    p0 = ti.cast(p0_hgc, ti.f32) # a
+    p1 = ti.cast(p1_hgc, ti.f32) # b
     p01 = p1-p0
     # p01的法向量
     norm = p01.normalized()
@@ -209,9 +211,9 @@ def sampling_gradient(a, b, vid, type=1):
     #     if diff_img[i, j] > 0 :
     #         gradient_img[i, j, k] = ti.Vector([diff_img[i, j], diff_img[i, j]])
 
-# 透视投影
+# 世界坐标系->图像坐标系
 # v: 为世界坐标系中的一个三维点位置，这里的v用齐次坐标表示，大小为4*1[x_w, y_w, z_w, 1]，其中psp_mat是投影矩阵
-# psp_v: 为v投影到归一化的图像坐标系中的一个点，也用齐次坐标表示，大小为3*1[x_o, y_o, 1]
+# psp_v: 为v投影到归一化的图像坐标系中的一个点，也用齐次坐标表示，大小为3*1[x_o, y_o, z_o, 1]
 @ti.func
 def pers_project(v):
     psp_v = psp_mat@v
@@ -333,9 +335,10 @@ def gradient():
     vi = ti.Vector(ver_index)
     for i in ti.static(range(vi.n)):
         print(i)
-        v0 = ver3[vi[i, 0]]
-        v1 = ver3[vi[i, 1]]
-        v2 = ver3[vi[i, 2]]
+        v0 = ver4[vi[i, 0]]
+        v1 = ver4[vi[i, 1]]
+        v2 = ver4[vi[i, 2]]
+
         sampling_gradient(v0, v1, 0)
         sampling_gradient(v1, v2, 1)
         sampling_gradient(v2, v0, 2)
