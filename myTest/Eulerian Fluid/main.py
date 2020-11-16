@@ -16,7 +16,7 @@ import Util
 ti.init(arch=ti.cpu)
 
 # General settings:
-resolutionX = 512
+resolutionX = 128
 pixels = ti.var(ti.f32, shape=(resolutionX, resolutionX))
 p_matrix = ti.var(ti.f32, shape=(resolutionX * resolutionX, resolutionX * resolutionX))
 dt = 0.02
@@ -103,8 +103,11 @@ def advect(vf: ti.template(), qf: ti.template(), new_qf: ti.template()):
         # Backtrace:
         coord_curr = ti.Vector([IX, IY]) + ti.Vector([0.5, 0.5])
         vel_curr = vf[IX, IY]
+        # 中点的位置
         coord_mid = coord_curr - 0.5 * dt * vel_curr
+        # 中点速度
         vel_mid = Util.bilerp(vf, coord_mid[0], coord_mid[1], resolutionX)
+        # 以中点速度回退的坐标
         coord_prev = coord_curr - dt * vel_mid
         # Get previous quality:
         q_prev = Util.bilerp(qf, coord_prev[0], coord_prev[1], resolutionX)
@@ -119,7 +122,6 @@ def addInflow(qf: ti.template(), area: ti.template(), quality: ti.template()):
     for i, j in qf:
         if bl_ix <= i <= tr_ix and bl_iy <= j <= tr_iy:
             qf[i, j] = quality
-
 
 @ti.kernel
 def fill_color(ipixels: ti.template(), idyef: ti.template()):
@@ -168,7 +170,7 @@ def correct_divergence(vf: ti.template(), vf_new: ti.template(), pf: ti.template
         vf_new[i, j] = vf[i, j] - ti.Vector([(pf[i + 1, j] - pf[i - 1, j]) / 2.0, (pf[i, j + 1] - pf[i, j - 1]) / 2.0])
 
 
-gui = ti.GUI('Advection schemes', (512, 512))
+gui = ti.GUI('Advection schemes', (resolutionX, resolutionX))
 while True:
     while gui.get_event(ti.GUI.PRESS):
         if gui.event.key in [ti.GUI.ESCAPE, ti.GUI.EXIT]: exit(0)
@@ -176,19 +178,23 @@ while True:
             pause = not pause
     if not pause:
         for itr in range(15):
-            # Add inflow:
+            # Add inflow: 设置进入的流体区域的初始速度和密度
             addInflow(velocities_pair.cur, area, inflow_velocity)
             addInflow(dyes_pair.cur, area, temp_dye)
             # Advection:
+            # 对边界碰撞的检测
             apply_vel_bc(velocities_pair.cur)
             advect(velocities_pair.cur, velocities_pair.cur, velocities_pair.nxt)
             advect(velocities_pair.cur, dyes_pair.cur, dyes_pair.nxt)
+            # 更新速度场和密度场
             velocities_pair.swap()
             dyes_pair.swap()
             apply_vel_bc(velocities_pair.cur)
             # External forces:
             # Projection:
+            # 计算速度场的散度
             divergence(velocities_pair.cur, velocity_divs)
+            # 通过雅可比迭代计算压力场
             pressure_jacobi(pressures_pair, velocity_divs)
             correct_divergence(velocities_pair.cur, velocities_pair.nxt, pressures_pair.cur)
             # correct_divergence(velocities_pair.cur, velocities_pair.nxt, pressures_pair.cur)

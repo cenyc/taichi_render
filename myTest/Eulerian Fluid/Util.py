@@ -30,6 +30,7 @@ def lerp(vl, vr, frac):
 def bilerp(vf, u, v, res):
     s, t = u - 0.5, v - 0.5
     # floor
+    # 查看advect之后在哪个格子上
     iu, iv = int(s), int(t)
     # fract
     fu, fv = s - iu, t - iv
