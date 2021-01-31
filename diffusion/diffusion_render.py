@@ -6,7 +6,7 @@ from camera import Camera
 from shape import Shape
 from scene import Scene
 import utility as utl
-# CUDA 在生成随机数时比 OpenGL 慢很多
+# CUDA 在生成随机数时比OpenGL慢很多
 ti.init(arch=ti.cpu)
 
 # *********************************************************************************************
