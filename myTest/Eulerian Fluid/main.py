@@ -16,7 +16,7 @@ import Util
 ti.init(arch=ti.cpu)
 
 # General settings:
-resolutionX = 128
+resolutionX = 512
 pixels = ti.var(ti.f32, shape=(resolutionX, resolutionX))
 p_matrix = ti.var(ti.f32, shape=(resolutionX * resolutionX, resolutionX * resolutionX))
 dt = 0.02
