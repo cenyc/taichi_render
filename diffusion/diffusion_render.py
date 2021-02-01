@@ -7,7 +7,7 @@ from shape import Shape
 from scene import Scene
 import utility as utl
 # CUDA 在生成随机数时比OpenGL慢很多
-ti.init(arch=ti.cpu)
+ti.init(arch=ti.cpu, excepthook=True)
 
 # *********************************************************************************************
 # --------------------------------------------读取外部数据---------------------------------------
@@ -27,6 +27,8 @@ camera = Camera()
 shape = Shape(len(ver), len(tri), id0.shape, 0)
 # 创建场景，关联相机与物体
 scene = Scene(camera, shape)
+ti_img = ti.field(ti.f32, shape=(camera.resolution_h, camera.resolution_w))
+ti_img_tar = ti.field(ti.f32, shape=(camera.resolution_h, camera.resolution_w))
 
 # *********************************************************************************************
 # ----------------------------------------在taichi域中赋值---------------------------------------
@@ -42,12 +44,19 @@ shape.translate(np.array([-0.25, -0.25, -2], dtype=np.float32))
 # *********************************************************************************************
 # -------------------------------------------程序运行-------------------------------------------
 # *********************************************************************************************
+# 渲染目标图像
 scene.render()
+utl.copy(scene.img, ti_img_tar)
+
+# 对相机视角进行平移，渲染源图像
+scene.cam.translate(np.array([-0.5, -0.5, 0]).astype(np.float32))
+scene.render()
+utl.copy(scene.img, ti_img)
 
 gui = ti.GUI('diffusion', (camera.resolution_w, camera.resolution_h))
 while gui.running:
     while gui.get_event(ti.GUI.PRESS):
         if gui.event.key == ti.GUI.ESCAPE:
             exit()
-    gui.set_image(scene.img.to_numpy())
+    gui.set_image(ti_img_tar.to_numpy())
     gui.show()

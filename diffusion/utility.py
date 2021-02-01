@@ -33,6 +33,18 @@ def printVector(vec):
     for i in ti.ndrange(vec.shape[0]):
         print(vec[i])
 
+# 归零
+@ti.func
+def zero(x: ti.template()):
+    for I in ti.grouped(x):
+        x[I] = ti.zero(x[I])
+
+# 复制，将x复制到y
+@ti.kernel
+def copy(x: ti.template(), y: ti.template()):
+    for I in ti.grouped(x):
+        y[I] = x[I]
+
 # 四舍五入-标量
 @ti.func
 def round(val):

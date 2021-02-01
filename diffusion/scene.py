@@ -30,6 +30,7 @@ class Scene:
 
     @ti.kernel
     def render(self):
+        utl.zero(self.img)
         for _i, _j in ti.ndrange(self.cam.resolution_h, self.cam.resolution_w):
             _ray = self.cam.get_ray(_i, _j)
             _dir_t_max = utl.infinitesimal
